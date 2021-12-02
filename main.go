@@ -40,9 +40,10 @@ func replaceUrl(cfg *ini.File) (changed bool) {
 }
 
 var iniDir = "./yum-repos"
+//var iniDir = "/etc/yum.repos.d"
 
 func main() {
-    files, err := os.ReadDir("yum-repos")
+    files, err := os.ReadDir(iniDir)
     if err != nil {
         fmt.Println(err)
         os.Exit(1)
