@@ -5,6 +5,8 @@ import (
     "os"
     "strings"
     "path/filepath"
+    "time"
+    "io"
 
     "gopkg.in/ini.v1"
 )
@@ -50,13 +52,13 @@ func main() {
     }
 
     for _, d := range files {
-        f := filepath.Join(iniDir, d.Name())
-        if filepath.Ext(f) != ".repo" {
-            fmt.Printf("Skipping not a repo file: %v\n", f)
+        fp := filepath.Join(iniDir, d.Name())
+        if filepath.Ext(fp) != ".repo" {
+            fmt.Printf("Skipping not a repo file: %v\n", fp)
             continue
         }
-        fmt.Printf("Reading ini file %v\n", f)
-        cfg, err := ini.Load(f)
+        fmt.Printf("Reading ini file %v\n", fp)
+        cfg, err := ini.Load(fp)
         if err != nil {
             fmt.Printf("Fail to read file: %v", err)
             os.Exit(1)
@@ -64,7 +66,23 @@ func main() {
 
         b := replaceUrl(cfg)
         if b {
-            cfg.SaveTo(filepath.Join(iniDir, d.Name() + "-local"))
+            h0, err := os.Open(fp)
+            if err != nil {
+                fmt.Println(err)
+                os.Exit(1)
+            }
+            defer h0.Close()
+
+            bkp := fp + ".bkp_" + time.Now().Format("02-01-06_03:04:05")
+            h1, err := os.Create(bkp)
+            if err != nil {
+                fmt.Println(err)
+                os.Exit(1)
+            }
+            defer h1.Close()
+            io.Copy(h1, h0)
+
+            cfg.SaveTo(fp)
         }
     }
 }
