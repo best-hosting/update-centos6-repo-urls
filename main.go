@@ -4,6 +4,7 @@ import (
     "fmt"
     "os"
     "strings"
+    "path/filepath"
 
     "gopkg.in/ini.v1"
 )
@@ -16,52 +17,54 @@ var newBaseUrl = map[Name]Links {
         oldURL: "https://download.fedoraproject.org/pub/epel/",
         newURL: "https://archives.fedoraproject.org/pub/archive/epel/",
     },
+    "base": Links {
+        oldURL: "http://mirror.centos.org/centos/",
+        newURL: "http://vault.centos.org/",
+    },
 }
 
-func main() {
-    cfg, err := ini.Load("my.ini")
-    if err != nil {
-        fmt.Printf("Fail to read file: %v", err)
-        os.Exit(1)
-    }
-
-    v := cfg.Sections()
-    for i := 0; i < len(v); i++ {
-        if v[i].HasKey("name") {
-            if v[i].Key("enabled").MustInt(1) == 1 {
-                fmt.Printf("enabled yum repo %v\n", v[i].Name())
-                for n, l := range newBaseUrl {
-                    if v[i].Name() == string(n) && v[i].HasKey("baseurl") {
-                        fmt.Printf("Try to replace in %v\n", v[i].Key("baseurl").Value())
-                        fmt.Printf("New baseurl: %v\n", strings.ReplaceAll(v[i].Key("baseurl").Value(), l.oldURL, l.newURL))
-                    }
-                }
-            } else {
-                fmt.Printf("disabled yum repo %v\n", v[i].Name())
+func replaceUrl(cfg *ini.File) (changed bool) {
+    for _, sec := range cfg.Sections() {
+        if _, ok := newBaseUrl[Name(sec.Name())]; ok && sec.HasKey("baseurl") {
+            l := newBaseUrl[Name(sec.Name())]
+            x := sec.Key("baseurl").Value()
+            y := strings.ReplaceAll(sec.Key("baseurl").Value(), l.oldURL, l.newURL)
+            if x != y {
+                changed = true
+                fmt.Printf("Replacing in section '%v' baseurl '%v' with '%v'\n", sec.Name(), x, y)
+                sec.Key("baseurl").SetValue(y)
             }
-        } else {
-            fmt.Printf("Not a yum repo section %v\n", v[i].Name())
         }
     }
     return
+}
 
-    // Classic read of values, default section can be represented as empty string
-    fmt.Println("App Mode:", cfg.Section("").Key("app_mode").String())
-    fmt.Println("Data Path:", cfg.Section("paths").Key("data").String())
+var iniDir = "./yum-repos"
 
-    // Let's do some candidate value limitation
-    fmt.Println("Server Protocol:",
-        cfg.Section("server").Key("protocol").In("http", []string{"http", "https"}))
-    // Value read that is not in candidates will be discarded and fall back to given default value
-    fmt.Println("Email Protocol:",
-        cfg.Section("server").Key("protocol").In("smtp", []string{"imap", "smtp"}))
+func main() {
+    files, err := os.ReadDir("yum-repos")
+    if err != nil {
+        fmt.Println(err)
+        os.Exit(1)
+    }
 
-    // Try out auto-type conversion
-    fmt.Printf("Port Number: (%[1]T) %[1]d\n", cfg.Section("server").Key("http_port").MustInt(9999))
-    fmt.Printf("Enforce Domain: (%[1]T) %[1]v\n", cfg.Section("server").Key("enforce_domain").MustBool(false))
-    
-    // Now, make some changes and save it
-    cfg.Section("").Key("app_mode").SetValue("production")
-    cfg.SaveTo("my.ini.local")
+    for _, d := range files {
+        f := filepath.Join(iniDir, d.Name())
+        if filepath.Ext(f) != ".repo" {
+            fmt.Printf("Skipping not a repo file: %v\n", f)
+            continue
+        }
+        fmt.Printf("Reading ini file %v\n", f)
+        cfg, err := ini.Load(f)
+        if err != nil {
+            fmt.Printf("Fail to read file: %v", err)
+            os.Exit(1)
+        }
+
+        b := replaceUrl(cfg)
+        if b {
+            cfg.SaveTo(filepath.Join(iniDir, d.Name() + "-local"))
+        }
+    }
 }
 
