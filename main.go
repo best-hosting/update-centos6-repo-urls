@@ -20,8 +20,8 @@ var newBaseUrl = map[Name]Links {
         newURL: "https://archives.fedoraproject.org/pub/archive/epel/",
     },
     "base": Links {
-        oldURL: "http://mirror.centos.org/centos/",
-        newURL: "http://vault.centos.org/",
+        oldURL: "http://mirror.centos.org/centos/$releasever",
+        newURL: "http://vault.centos.org/6.10",
     },
 }
 
